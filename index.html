@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>Ejercicio de Indexdb</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+
+<!--Utilizando una base de datos en IndexedDB
+Crea un formulario con los datos que tu quieras, coches, productos, animales...
+
+Agrega los siguientes botones:
+Abrir Base: Abre o crea una base de datos en indexedDB para trabajar con los datos del formulario.
+Guardar: Guarda los datos reflejados en el formulario dentro de la base.
+Ver: A partir de la clave visualiza el resto de datos
+Modificar: Modifica datos correspondientes a la clave que se indique
+Nuevo: Limpia todos los inputs del formulario
+Borrar: Elimina el registro correspondiente a la clave que se indique.
+Listar: Genera un listado por pantalla de todos los datos guardados en la base.-->
+<style>
+    table,th,td{
+        border: solid 1px black;
+    }
+</style>
+<body>
+    <h2>Ejercicio de IndexedDB</h2>
+    <form id="form">
+        <fieldset>
+            <legend>Ingresa los datos de tu moto</legend>
+            <p id="error" style="color: red;"></p>
+            <label>ID:</label>
+            <input type="text" name="id" id="id" disabled/>
+            <label>Marca:</label>
+            <input type="text" name="marca" id="marca" /><br><br>
+            <label>Modelo:</label>
+            <input type="text" name="modelo" id="modelo" />
+            <label>Kilometraje:</label>
+            <input type="text" name="kilometraje" id="kilometraje" /><br><br>
+            <label>Combustible:</label>
+            <select name="combustible" id="combustible">
+                <option value="gasolina" >Gasolina</option>
+                <option value="diesel">Diesel</option>
+                <option value="eléctrico">Eléctrica</option>
+                <option value="otros">Otros</option>
+            </select>
+            <label>Nº Serial:</label>
+            <input type="text" name="serial" id="serial" maxlength="8" onkeyup="mayusculas(this)"/>
+            <button id="update" onclick="updateData()" disabled>Actualizar datos</button><br><br>
+        </fieldset>
+    </form>
+    
+    <button id="abrir" onclick="abrirCrearBase()">Abrir Base</button>
+    <button id="guardar" onclick="agregarDatos()" disabled >Guardar Moto</button>
+    <button id="ver" onclick="verElemento()" disabled>Ver</button>
+    <button id="nuevo" onclick="nuevo()" disabled>Nuevo Registro</button>
+    
+    <button id="listar" onclick="listar()" disabled>Listar Motos</button>
+<!--Creamos la tabla oculta que se mostrara cuando hagamos click-->
+    <div id="elementos" style="display: none;">
+        <table>
+           <thead>
+               <tr>
+                   <th>Marca</th>
+                   <th>Modelo</th>
+                   <th>Kilometraje</th>
+                   <th>Combustible</th>
+                   <th>Nº Serial</th>
+                   <th>Acciones</th>
+               </tr>
+           </thead> 
+           <tbody id="listaDeDatos"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const IndexedDB = window.indexedDB;
+        var db = null;
+        //seleccionamos la tabla y los botones
+        const tabla = document.getElementById('elementos');
+        var botonGuardar = document.getElementById('guardar');
+        var botonVer = document.getElementById('ver');
+        var botonNuevo = document.getElementById('nuevo');
+        var botonListar = document.getElementById('listar');
+        var botonUpdate = document.getElementById('update');
+        //el msj de error para rellenarlo luego
+        var error = document.getElementById('error');
+        //para las mayusculas del input serial
+    function mayusculas(e) {
+    e.value = e.value.toUpperCase();
+    }
+    //FUNCION PARA ABRIR O CREAR LA BASE DE DATOS
+        function abrirCrearBase(){//habilitamos todos los botones 
+        botonGuardar.removeAttribute('disabled');
+        botonVer.removeAttribute('disabled');
+        botonListar.removeAttribute('disabled');
+        botonNuevo.removeAttribute('disabled');
+        //creamos o abrimos la base de datos si ya existe
+         db = indexedDB.open("propiedades",1);
+
+	     db.onsuccess=function(e){
+		 console.log("Base de datos cargada")	
+        }
+       
+	    db.onupgradeneeded=function(e){
+        var active = db.result;
+        var object = active.createObjectStore('motos',{keyPath: 'id', autoIncrement: true});
+        //creamos los indices donde se gardaran los datos e indicamos si se pueden repetir o no
+        object.createIndex("Marca",'marca',{unique : false});
+        object.createIndex("Modelo","modelo",{ unique : false});
+        object.createIndex("Kilometraje","kilometraje",{ unique : false});
+        object.createIndex("Combustible","combustible",{ unique : false});
+        object.createIndex("Serial",'serial', {unique : true});
+	    }
+	    db.onerror=(error)=>{
+		console.log('Error',error);
+	    }
+	
+     }
+//FUNCION PARA AGREGAR DATOS
+     function agregarDatos(){ //verificamos que los inputs no esten vacios
+         if(document.getElementById('marca').value == "" || document.getElementById('modelo').value == "" || document.getElementById('kilometraje').value == "" ){
+             error.innerHTML = "Debe rellenar todos los campos***";
+         }else{
+             error.innerHTML = "";
+            var active = db.result;
+            var data = active.transaction(['motos'],'readwrite');
+            var object = data.objectStore('motos');
+    //esta variable va almacenar el intento de agregar datos
+            var request = object.put({
+                //seleccionamos los valores de los inputs
+                marca : document.querySelector('#marca').value,
+                modelo : document.querySelector('#modelo').value,
+                kilometraje : document.querySelector('#kilometraje').value,
+                combustible : document.querySelector('#combustible').value,
+                serial : document.querySelector('#serial').value
+            });
+            //vamos a controlar que sucede para saber si se ha insertado correctamente
+                request.onerror = function (e) {
+                    alert(request.error.name + '\n\n' + request.error.message);
+                }
+                data.oncomplete = function (e){
+                    alert("Se agregaron los datos correctamente");
+                    listar();
+                }
+          }
+   }
+         
+//FUNCION PARA MOSTAR LOS DATOS YA GUARDADOS
+     function listar(){
+        tabla.style.display = "block";
+        var active = db.result;
+        var data = active.transaction(['motos'],'readonly');
+        var object = data.objectStore('motos');
+        var elements = [];
+        //hacemos que recorra los elementos del objeto
+        object.openCursor().onsuccess = function(e){
+            var result = e.target.result;
+            if(result === null){
+                return;
+            }
+            elements.push(result.value);
+            //le indicamos al puntero que continua al siguiente elemento
+            result.continue();
+        };
+        data.oncomplete = function() {
+            //en la siguiente variable agregaremos lo que insertaremos en la tabla
+            var contenidoHTMl = "";
+            //hacemos un bucle para guardar los datos y crear la tabla con ellos
+            for (var key in elements){
+                contenidoHTMl += '\n\
+                <tr>\n\
+                    <td>' +elements[key].marca + '</td>\n\
+                    <td>' +elements[key].modelo + '</td>\n\
+                    <td>' +elements[key].kilometraje + '</td>\n\
+                    <td>' +elements[key].combustible + '</td>\n\
+                    <td>' +elements[key].serial + '</td>\n\
+                    <td><button type="button" onclick="modificar('+elements[key].id+')">Modificar</button><button type="button" onclick="borrarData('+elements[key].id+')">Borrar</button></td>\n\
+                </tr>';
+            }
+            elements = [];
+            //insertamos el contenido en la tabla
+            document.querySelector('#listaDeDatos').innerHTML = contenidoHTMl;
+        }
+     }
+//FUNCION PARA LIMPIAR LOS CAMPOS DE LOS INPUTS
+     function nuevo(){
+        document.querySelector('#id').value = "";
+        document.querySelector('#marca').value = "";
+        document.querySelector('#modelo').value = "";
+        document.querySelector('#kilometraje').value = "";
+        document.querySelector('#combustible').value = "";
+        document.querySelector('#serial').value = "";
+     }
+       
+     function verElemento(){
+        id = prompt("introduzca la key de la moto a consultar");
+        var active = db.result;
+        var data = active.transaction(['motos'],'readonly');
+        var object = data.objectStore('motos');
+        //nos aseguramos de que le pasamos un numero
+        var request = object.get(parseInt(id));
+    
+        request.onsuccess = function (){
+            var result = request.result;
+            if(result !== undefined){
+                alert("ID:" + result.id + "\n\
+                MARCA: "+ result.marca+"\n\
+                MODELO: "+ result.modelo+"\n\
+                KILOMETRAJE: "+ result.kilometraje+"\n\
+                SERIAL: "+ result.serial+"\n\
+                COMBUSTIBLE: "+ result.combustible);
+            }else{
+                alert("No hay motos con esa key pruebe con otra**");
+            }
+        };
+     }
+//FUNCION MODIFICAR
+     function modificar(id){//habilitamos el boton Actualizar datos
+        botonUpdate.removeAttribute('disabled');
+        var active = db.result;
+        var data = active.transaction(['motos'],'readonly');
+        var object = data.objectStore('motos');
+        //nos aseguramos de que le pasamos un numero
+        var request = object.get(parseInt(id));
+    
+        request.onsuccess = function (){
+            var result = request.result;
+            console.log(result.id);
+            if(result !== undefined){
+                //introducimos los valores en los inputs
+                document.querySelector('#id').value = result.id;
+                document.querySelector('#marca').value = result.marca;
+                document.querySelector('#modelo').value = result.modelo;
+                document.querySelector('#kilometraje').value = result.kilometraje;
+                document.querySelector('#combustible').value = result.combustible;
+                document.querySelector('#serial').value = result.serial;
+            }
+
+        };
+     }
+//FUNCION BORRAR
+     function borrarData(id) {
+        var confirmacion = confirm("Desea borrar esta moto?");
+        if(confirmacion == true){
+        var active = db.result;
+        //debemos especificar sobre que se hara la transaccion y el modo
+        var data = active.transaction(['motos'],'readwrite');
+        //hacemos la transaccion
+        var object = data.objectStore('motos');
+        var request = object.delete(parseInt(id));
+        
+        listar();
+        }
+     }
+
+     function updateData(){
+        var id = document.getElementById('id').value;
+        var active = db.result;
+        var data = active.transaction(['motos'],'readwrite');
+        var object = data.objectStore('motos');
+        //le debemos pasar el valor de la key para actualizar al resto
+         var request = object.put({
+            id : parseInt(id),
+        //le asignamos el valor de los inputs
+            marca : document.querySelector('#marca').value,
+            modelo : document.querySelector('#modelo').value,
+            kilometraje : document.querySelector('#kilometraje').value,
+            combustible : document.querySelector('#combustible').value,
+            serial : document.querySelector('#serial').value
+         }); 
+         request.onerror = function (e) {
+            alert("no se ha actualizado");
+         }
+         data.oncomplete = function (e){
+            alert("Se agregaron los datos correctamente");
+            listar();
+         }
+     }
+     
+      
+    </script>
+</body>
+</html>
